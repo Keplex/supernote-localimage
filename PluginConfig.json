@@ -1,0 +1,14 @@
+{
+  "name": "本地插图",
+  "pluginKey": "LocalImage",
+  "pluginID": "limg26nomad00001",
+  "iconPath": "assets/icon.png",
+  "desc": "本地插图、裁剪与灰阶调整，中英双语、自动预览。Offline image insertion, crop and tone controls.",
+  "versionCode": "3",
+  "versionName": "0.3.0",
+  "jsMainPath": "index",
+  "uses-permissions": [
+    "plugin.permission.FILE:READ",
+    "plugin.permission.FILE:WRITE"
+  ]
+}

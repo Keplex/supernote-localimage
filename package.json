@@ -1,0 +1,35 @@
+{
+  "name": "LocalImage",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Insert a local PNG or JPEG into the current Supernote note page.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.mts tests/*.test.cjs",
+    "test:native": "node scripts/native-build.cjs --test",
+    "bundle": "react-native bundle --entry-file index.js --bundle-output build/generated/LocalImage.bundle --platform android --assets-dest build/generated --dev false --max-workers 2",
+    "build": "node scripts/build.cjs"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "react-native": "0.79.2",
+    "sn-plugin-lib": "0.2.3"
+  },
+  "devDependencies": {
+    "@babel/core": "7.25.2",
+    "@babel/runtime": "7.25.0",
+    "@react-native-community/cli": "18.0.0",
+    "@react-native-community/cli-platform-android": "18.0.0",
+    "@react-native/babel-preset": "0.79.2",
+    "@react-native/metro-config": "0.79.2",
+    "@react-native/typescript-config": "0.79.2",
+    "@types/react": "19.0.0",
+    "fflate": "0.8.2",
+    "react-test-renderer": "19.0.0",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@11.25.0"
+}

@@ -1,0 +1,79 @@
+export type Language = 'zh' | 'en';
+let language: Language = 'zh';
+export function setLanguage(value: Language) {language = value;}
+export function getLanguage(): Language {return language;}
+
+const english: Record<string, string> = {
+  '本地插图': 'Local Image', '返回笔记': 'Back', '换图': 'Change', '选择并编辑': 'Choose & edit',
+  '选图直插': 'Pick & insert', '选择一张图片开始': 'Choose an image to start',
+  '全程离线 · 原图保留': 'Offline · Originals kept', '裁剪': 'Crop', '灰阶': 'Tone',
+  '左上角': 'Top left', '右下角': 'Bottom right', '还原全图': 'Reset crop',
+  '选择一个角，再点图定位；触控笔更精确。拖动后松手更新。': 'Select a corner, then tap the image. A stylus is more precise. Drag and release to set.',
+  '裁剪区域': 'Crop area', '下一步：灰阶': 'Next: tone', '插入原图': 'Insert original',
+  '插入效果': 'Insert edited', '已提交': 'Submitted', '等待预览': 'Wait for preview',
+  '还原灰阶': 'Reset tone', '对比原灰阶': 'Compare original', '看调整效果': 'Show edited',
+  '立即更新': 'Refresh now', '重试预览': 'Retry preview', '原始灰阶（已裁剪）': 'Original tone (cropped)',
+  '调整后的效果': 'Edited preview', '停止调节 1.2 秒后自动预览': 'Auto preview 1.2 s after the last change',
+  '等待自动预览…': 'Waiting to preview…', '正在更新预览…': 'Updating preview…',
+  '预览已就绪': 'Preview ready', '预览未就绪，请重试': 'Preview unavailable; retry above',
+  '亮度': 'Brightness', '对比度': 'Contrast', '提亮暗部': 'Lift shadows', '压暗亮部': 'Lower highlights',
+  '自然': 'Natural', '均衡': 'Balanced', '提亮': 'Lighter', '压暗': 'Darker', '线稿': 'Line art',
+  '自动黑白点': 'Auto levels', '黑': 'Black', '白': 'White', '目标': 'Target', '页': 'Page',
+  '选图直插跳过编辑预览，直接使用原文件。': 'Pick & insert skips editing and uses the original file.',
+  '正在读取图片…': 'Reading image…', '正在生成预览…': 'Preparing preview…',
+  '正在保存图片并插入…': 'Exporting and inserting…', '正在插入原图…': 'Inserting original…',
+  '图片已插入并保存。': 'Image inserted and saved.', '图片已插入，请返回笔记检查。': 'Image inserted. Return to the note to check.',
+  '已取消选择，笔记未修改。': 'Selection cancelled. Note unchanged.',
+  '预览文件读取失败，请重试预览。': 'Cannot read the preview. Please retry.',
+  '暂时无法关闭插件，请使用系统返回操作。': 'Cannot close the plugin. Please use the system Back action.',
+  '返回笔记失败': 'Could not return to the note', '语言设置未保存，请重试切换。': 'Language preference was not saved. Please try again.',
+  '保存处理后的图片并插入笔记，需要文件写入权限。': 'File write permission is needed to insert images and save the note.',
+  '预览和调整图片需要读取本地文件。': 'File read permission is needed to select and edit local images.',
+  '选择要插入的图片': 'Choose an image', '选择': 'Select', '未知错误': 'Unknown error',
+  '图片编辑模块未加载。请安装完整升级包并重启设备。': 'Image editor module is unavailable. Install the complete update and restart the device.',
+  '无法读取插件私有目录。': 'Cannot access the plugin directory.',
+  '工具栏按钮注册失败，请重新启用插件。': 'Cannot register the toolbar button. Please re-enable the plugin.',
+  '已取消授权，尚未修改笔记。': 'Permission cancelled. Note unchanged.',
+  '写入权限未获允许，请在设置 → 应用 → 插件中更改权限。': 'Write permission denied. Change permissions in Settings > Apps > Plugins.',
+  '读取权限未获允许，请在设置 → 应用 → 插件中更改权限。': 'Read permission denied. Change permissions in Settings > Apps > Plugins.',
+  '权限声明未被系统识别，请重新安装插件。': 'Permission declarations were not recognized. Reinstall the plugin.',
+  '没有笔记写入权限，请在插件管理中允许文件写入。': 'Allow file write access in plugin settings.',
+  '没有图片读取权限，请在插件管理中允许文件读取。': 'Allow file read access in plugin settings.',
+  '文件或文件夹已锁定，请先在系统文件管理器中解锁。': 'Unlock the file or folder in the system file manager first.',
+  '系统没有返回有效结果': 'The system did not return a valid result', '代码': 'code',
+  '图片路径编码无效，请重新选择。': 'Invalid image path encoding. Choose the file again.',
+  '请选择设备上的本地图片文件。': 'Choose a local image file on the device.',
+  '仅支持 PNG、JPG、JPEG 图片。请先转换其他格式。': 'Only PNG, JPG and JPEG are supported. Convert other formats first.',
+  '无法读取图片尺寸，文件可能损坏。': 'Cannot read image dimensions. The file may be damaged.',
+  '图片尺寸过大，请先缩小到 1600 万像素以内，且长边不超过 8192 像素。': 'Image too large. Use at most 16 megapixels and 8192 pixels per side.',
+  '读取当前笔记失败': 'Cannot read the current note', '读取当前页失败': 'Cannot read the current page',
+  '请打开一本笔记，从笔记工具栏进入“本地插图”。': 'Open a note and launch Local Image from its toolbar.',
+  '操作进行中，请稍候。': 'An operation is in progress. Please wait.',
+  '操作进行中，请勿重复点击。': 'An operation is in progress. Please do not submit again.',
+  '图片不存在或无法读取，请重新选择。': 'Image missing or unreadable. Choose it again.',
+  '无法解码图片，请检查文件是否完整、已解锁且可读取。': 'Cannot decode the image. Check it is intact, unlocked and readable.',
+  '请先选择图片；已提交的图片不能重复提交。': 'Choose an image first. An already submitted image cannot be submitted again.',
+  '图片已移动或无法读取，请重新选择。': 'Image moved or unreadable. Choose it again.',
+  '调整后的图片未成功保存，笔记尚未修改。': 'The edited image was not saved. Note unchanged.',
+  '当前笔记或页码已变化。请返回目标页后重新选择图片。': 'The note or page changed. Return to the target page and choose the image again.',
+  '未能确认插入结果，请先返回笔记检查，避免重复插入。': 'Insertion could not be confirmed. Check the note before inserting again.',
+  '系统没有返回明确的插入结果，请先返回笔记检查，避免重复插入。': 'The system returned no clear insertion result. Check the note before inserting again.',
+  '图片未插入': 'Image not inserted', '保存未确认': 'Save not confirmed',
+  '图片已插入，但未能确认保存。请返回笔记检查并保存。': 'Image inserted, but saving could not be confirmed. Return to the note to check and save.',
+  '图片处理内存不足，请缩小原图后重试': 'Not enough memory. Use a smaller image and try again.',
+  '编辑器已关闭，请重新打开插件': 'Editor closed. Reopen the plugin.',
+  '图片不存在或不可读取': 'Image missing or unreadable', '仅支持有效的 PNG 或 JPEG 图片': 'Only valid PNG or JPEG images are supported',
+  '图片尺寸无效或超过 1600 万像素 / 8192 像素长边': 'Invalid dimensions or larger than 16 megapixels / 8192 pixels per side',
+  '导出目录无效': 'Invalid export directory', '无法确认插件私有目录，请重新安装升级包': 'Cannot validate the plugin directory. Reinstall the update.',
+  '预览目录无效': 'Invalid preview directory', '无法创建图片输出目录': 'Cannot create the image output directory',
+  '处理模式无效': 'Invalid processing mode', '图片解码失败': 'Image decoding failed', 'PNG 保存失败': 'PNG could not be saved',
+  '灰阶参数超出范围': 'Tone values are out of range', '裁剪区域无效': 'Invalid crop area',
+};
+export function t(chinese: string): string {return language === 'en' ? english[chinese] ?? chinese : chinese;}
+// Preserve native/system diagnostics while translating messages owned by this plugin.
+const phrases = Object.keys(english).sort((a, b) => b.length - a.length);
+export function translateError(message: string): string {
+  if (language !== 'en') {return message;}
+  for (const phrase of phrases) {message = message.split(phrase).join(english[phrase]);}
+  return message;
+}

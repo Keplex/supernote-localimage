@@ -1,0 +1,4 @@
+storeDir: ../pnpm-store
+ignoreScripts: true
+minimumReleaseAgeExclude:
+  - sn-plugin-lib@0.2.3
