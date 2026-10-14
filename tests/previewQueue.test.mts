@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {PreviewQueue, PREVIEW_DELAY} from '../src/previewQueue.ts';
 
 const flush = async () => {await Promise.resolve(); await Promise.resolve(); await Promise.resolve();};
-test('rapid changes merge into one render 1.2 seconds after the last tap', async context => {
+test('rapid changes merge into one render 0.5 seconds after the last tap', async context => {
   context.mock.timers.enable({apis: ['setTimeout']});
   const rendered: number[] = [], published: number[] = [];
   const queue = new PreviewQueue(async (n: number) => {rendered.push(n); return n;}, n => published.push(n), assert.fail, () => {});
-  queue.request(1); context.mock.timers.tick(1000);
-  queue.request(2); context.mock.timers.tick(1000);
+  queue.request(1); context.mock.timers.tick(100);
+  queue.request(2); context.mock.timers.tick(100);
   queue.request(3); context.mock.timers.tick(PREVIEW_DELAY - 1);
   assert.deepEqual(rendered, []);
   context.mock.timers.tick(1); await flush();

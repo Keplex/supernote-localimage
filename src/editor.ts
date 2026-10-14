@@ -1,12 +1,12 @@
 export interface Crop {left: number; top: number; right: number; bottom: number}
-export interface Tone {brightness: number; contrast: number; shadows: number; highlights: number; black: number; white: number; autoLevels: boolean}
+export interface Tone {brightness: number; contrast: number; shadows: number; highlights: number; black: number; white: number; autoLevels: boolean; opaqueWhite: boolean}
 export type Recipe = Crop & Tone;
 export interface RenderResult {
   path: string; width: number; height: number; black: number; white: number;
   histogram: number[]; darkPercent: number; lightPercent: number;
 }
 export const FULL_CROP: Crop = {left: 0, top: 0, right: 1, bottom: 1};
-export const NEUTRAL: Tone = {brightness: 0, contrast: 0, shadows: 0, highlights: 0, black: 0, white: 255, autoLevels: false};
+export const NEUTRAL: Tone = {brightness: 0, contrast: 0, shadows: 0, highlights: 0, black: 0, white: 255, autoLevels: false, opaqueWhite: false};
 export type Corner = 'topLeft' | 'bottomRight';
 export type ToneControl = 'brightness' | 'contrast' | 'shadows' | 'highlights';
 export const PRESETS: {name: string; tone: Tone}[] = [
@@ -44,7 +44,7 @@ export function stepTone(tone: Tone, field: ToneControl, direction: number): Ton
 }
 export function recipeKey(crop: Crop, tone: Tone): string {
   return JSON.stringify([crop.left, crop.top, crop.right, crop.bottom, tone.brightness, tone.contrast,
-    tone.shadows, tone.highlights, tone.black, tone.white, tone.autoLevels]);
+    tone.shadows, tone.highlights, tone.black, tone.white, tone.autoLevels, tone.opaqueWhite]);
 }
 export function resolvedRecipe(crop: Crop, tone: Tone, rendered: RenderResult): Recipe {
   return {...crop, ...tone, black: rendered.black, white: rendered.white, autoLevels: false};

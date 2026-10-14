@@ -14,6 +14,8 @@ export interface Dependencies {
   measure(uri: string): Promise<{width: number; height: number}>;
   insert(path: string): Promise<unknown>;
   save(): Promise<unknown>;
+  captureSelection?(context: Context): Promise<unknown>;
+  selectInserted?(context: Context, snapshot: unknown): Promise<void>;
 }
 
 export async function ensurePermission(deps: Pick<Dependencies, 'hasPermission' | 'requestPermission'>, name: string): Promise<void> {
@@ -155,6 +157,8 @@ export class ImageController {
       // The editor exports only after write permission. A failed export never falls back to the source.
       const insertionPath = prepare ? imagePath(await prepare({...selection})) : selection.path;
       if (prepare && !(await this.deps.exists(insertionPath))) {throw new Error('调整后的图片未成功保存，笔记尚未修改。');}
+      let snapshot: unknown = null;
+      try {snapshot = await this.deps.captureSelection?.(selection.target);} catch { /* Optional metadata only. */ }
       const current = await this.context();
       if (current.path !== selection.target.path || current.page !== selection.target.page) {
         throw new Error('当前笔记或页码已变化。请返回目标页后重新选择图片。');
@@ -181,6 +185,7 @@ export class ImageController {
         if (saved.success !== true || saved.result !== true) {
           throw apiError(saved.error, '保存未确认');
         }
+        try {await this.deps.selectInserted?.(selection.target, snapshot);} catch { /* The image is already saved. */ }
         return {saved: true};
       } catch (error) {
         return {saved: false, warning: `图片已插入，但未能确认保存。请返回笔记检查并保存。\n${errorText(error)}`};

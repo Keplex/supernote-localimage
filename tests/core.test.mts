@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {ImageController, READ, WRITE, fileUri, imagePath, validateDimensions} from '../src/core.ts';
+import type {Dependencies} from '../src/core.ts';
 
 const ok = (result: unknown) => ({success: true, result, error: null});
 function fixture() {
@@ -226,4 +227,23 @@ test('denying write permission stops export before any file is created', async (
   let called = false;
   await assert.rejects(f.controller.insert(async () => {called = true; return '/adjusted.png';}));
   assert.equal(called, false);
+});
+test('selection hooks surround insertion/save, and failed selection never retries insertion', async () => {
+  const f = fixture(); const deps = f.deps as Dependencies;
+  deps.captureSelection = async () => {f.calls.push('capture'); return [1];};
+  deps.selectInserted = async (_, snapshot) => {
+    assert.deepEqual(snapshot, [1]); f.calls.push('select'); throw Error('unsupported');
+  };
+  await f.controller.pick(); assert.deepEqual(await f.controller.insert(), {saved: true});
+  assert.deepEqual(f.calls.filter(c => ['capture', 'insert', 'save', 'select'].includes(c)), ['capture', 'insert', 'save', 'select']);
+  await assert.rejects(f.controller.insert(), /重复提交/);
+});
+test('failed optional capture does not prevent insertion', async () => {
+  const f = fixture(); (f.deps as Dependencies).captureSelection = async () => {throw Error('unsupported');};
+  await f.controller.pick(); assert.deepEqual(await f.controller.insert(), {saved: true});
+});
+test('context is checked again after optional selection metadata reads', async () => {
+  const f = fixture(); (f.deps as Dependencies).captureSelection = async () => {f.state.page++; return [];};
+  await f.controller.pick(); await assert.rejects(f.controller.insert(), /页码已变化/);
+  assert.ok(!f.calls.includes('insert'));
 });

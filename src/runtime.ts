@@ -1,5 +1,7 @@
 import {Image, NativeModules} from 'react-native';
-import {FileUtils, PluginCommAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
+import {FileUtils, PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
+import {captureElements, selectInsertedImage} from './selection';
+import type {SelectionAPI} from './selection';
 import type {Dependencies} from './core';
 import {ensurePermission, READ} from './core';
 import type {Recipe, RenderResult} from './editor';
@@ -51,6 +53,16 @@ export function initializePlugin(): Promise<void> {
   return startup;
 }
 
+const selectionAPI: SelectionAPI = {
+  currentFile: () => PluginCommAPI.getCurrentFilePath(),
+  currentPage: () => PluginCommAPI.getCurrentPageNum(),
+  elements: context => PluginFileAPI.getElements(context.page, context.path),
+  pageSize: context => PluginFileAPI.getPageSize(context.path, context.page),
+  selected: () => PluginCommAPI.getLassoElements(),
+  lasso: rect => PluginCommAPI.lassoElements(rect),
+  state: value => PluginCommAPI.setLassoBoxState(value),
+};
+
 export const dependencies: Dependencies = {
   hasPermission: name => PluginManager.hasPermission(name),
   requestPermission: (name, description) => PluginManager.requestPermission(name, description),
@@ -61,4 +73,6 @@ export const dependencies: Dependencies = {
   measure: uri => processor().inspect(decodeURIComponent(uri.slice(7))),
   insert: path => PluginNoteAPI.insertImage(path),
   save: () => PluginNoteAPI.saveCurrentNote(),
+  captureSelection: context => captureElements(selectionAPI, context),
+  selectInserted: (context, snapshot) => selectInsertedImage(selectionAPI, context, snapshot),
 };

@@ -1,14 +1,16 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {BackHandler, Image, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {BackHandler, Image, SafeAreaView, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 import {basename, errorText, fileUri, ImageController} from './src/core';
 import type {Selection} from './src/core';
 import {BUTTON_ID, dependencies, initializePlugin, renderImage, loadLanguage, saveLanguage} from './src/runtime';
 import {FULL_CROP, NEUTRAL, recipeKey, resolvedRecipe, previewHeight} from './src/editor';
 import type {Corner, Crop, Recipe, RenderResult, Tone} from './src/editor';
-import {Button, CropCanvas, Histogram, ToneControls} from './src/EditorControls';
+import {Button, CompareButton, CropCanvas, Histogram, ResetButton, ToneControls, TonePresets} from './src/EditorControls';
 import {PreviewQueue} from './src/previewQueue';
 import type {PreviewStatus} from './src/previewQueue';
+import {AboutScreen} from './src/AboutScreen';
+import {AppHeader} from './src/AppHeader';
 import {getLanguage, setLanguage, t} from './src/i18n';
 
 interface Preview {image: RenderResult; neutral: RenderResult; key: string; recipe: Recipe}
@@ -19,6 +21,8 @@ export default function App(): React.JSX.Element {
   const alive = useRef(true), working = useRef(false), closing = useRef(false);
   const scroll = useRef<ScrollView>(null);
   const neutralCache = useRef<{key: string; image: RenderResult} | null>(null);
+  const [about, setAbout] = useState(false);
+  const aboutOpen = useRef(false); aboutOpen.current = about;
   const [ready, setReady] = useState(false), [busy, setBusy] = useState('');
   const [language, showLanguage] = useState(getLanguage()), [languageBusy, setLanguageBusy] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -49,7 +53,7 @@ export default function App(): React.JSX.Element {
   }, status => {if (alive.current) {setPreviewStatus(status);}}));
 
   function resetEditor() {
-    queue.cancel(); neutralCache.current = null;
+    queue.cancel(); neutralCache.current = null; setAbout(false);
     controller.current = new ImageController(dependencies);
     setSelection(null); setBase(null); setPreview(null);
     setCrop({...FULL_CROP}); setTone({...NEUTRAL}); setCorner('topLeft'); setStage('crop'); setCompare(false);
@@ -76,17 +80,17 @@ export default function App(): React.JSX.Element {
       }});
     }).catch(error => {if (alive.current) {setMessage(errorText(error));}});
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!working.current) {void close();} return true;
+      if (aboutOpen.current) {setAbout(false);} else if (!working.current) {void close();} return true;
     });
     return () => {alive.current = false; queue.cancel(); subscription?.remove(); back.remove();};
   }, []);
 
   useEffect(() => {
-    if (stage === 'tone' && selection && !busy && !submitted) {
+    if (!about && stage === 'tone' && selection && !busy && !submitted && (dirty || previewError)) {
       queue.request({path: selection.path, crop: {...crop}, tone: {...tone}});
     }
     return () => queue.cancel();
-  }, [queue, stage, selection, crop, tone, busy, submitted]);
+  }, [queue, stage, selection, crop, tone, busy, submitted, about]);
 
   async function switchLanguage() {
     if (languageBusy) {return;}
@@ -135,12 +139,6 @@ export default function App(): React.JSX.Element {
     finally {working.current = false; if (alive.current) {setBusy('');}}
     if (saved && alive.current) {await close();}
   }
-  function refresh() {
-    if (working.current || !selection || submitted) {return;}
-    if (previewError) {neutralCache.current = null;}
-    setMessage('');
-    queue.request({path: selection.path, crop: {...crop}, tone: {...tone}}, true);
-  }
   async function insert(edited: boolean) {
     if (working.current || !controller.current.canInsert || (edited && (dirty || !preview || previewError || compare || previewStatus !== 'idle'))) {return;}
     queue.cancel(); working.current = true;
@@ -161,19 +159,19 @@ export default function App(): React.JSX.Element {
   const display = compare ? preview?.neutral : preview?.image;
   const height = previewHeight(viewport, topHeight, stage === 'tone' ? bottomHeight : 0);
   const statusText = previewStatus === 'waiting' ? '等待自动预览…' : previewStatus === 'rendering' ? '正在更新预览…'
-    : previewError ? '预览未就绪，请重试' : compare ? '原始灰阶（已裁剪）' : '停止调节 1.2 秒后自动预览';
+    : previewError ? '预览失败，调整参数或还原灰阶后重试' : compare ? '原始灰阶（已裁剪） · 再点 ◐ 看调整效果' : '停止调节 0.5 秒后自动预览 · ◐ 对比原灰阶';
+  const changeTone = (value: Tone) => {setTone(value); setCompare(false); setMessage('');};
+  if (about) {return <AboutScreen onBack={() => setAbout(false)} language={language} onLanguage={() => void switchLanguage()} languageDisabled={languageBusy} />;}
   return <SafeAreaView style={s.screen}>
-    <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-    <View style={s.header}>
-      <Text style={[s.title, s.flex]}>{t('本地插图')}</Text>
-      <Button label={language === 'zh' ? 'English' : '中文'} accessibilityLabel="中文 / English" onPress={() => void switchLanguage()} disabled={!ready || !!busy || languageBusy} small />
-      <Button label={t('返回笔记')} onPress={() => void close()} disabled={!!busy} small />
-    </View>
+    <AppHeader language={language} onBack={() => void close()} onLanguage={() => void switchLanguage()}
+      onAbout={() => {queue.cancel(); setAbout(true);}} disabled={!!busy} languageDisabled={!ready || languageBusy} />
     <View style={s.fileRow}>
       <View style={s.flex}><Text style={s.file} numberOfLines={1}>{selection ? basename(selection.path) : t('选择一张图片开始')}</Text>
         <Text style={s.hint}>{selection ? `${selection.width} × ${selection.height}` : 'PNG / JPG / JPEG'}</Text></View>
-      <Button label={t(selection ? '换图' : '选择并编辑')} onPress={() => void choose()} disabled={!ready || !!busy} small />
-      <Button label={t('选图直插')} onPress={() => void choose(true)} disabled={!ready || !!busy} small />
+      {selection ? <Button label={t('换一张')} onPress={() => void choose()} disabled={!ready || !!busy} /> : <>
+        <Button label={t('选择并编辑')} onPress={() => void choose()} disabled={!ready || !!busy} />
+        <Button label={t('直接插入')} accessibilityLabel={`⚡ ${t('直接插入')}`} icon="bolt" primary onPress={() => void choose(true)} disabled={!ready || !!busy} />
+      </>}
     </View>
     {selection && <View style={s.tabs}>
       <View style={s.flex}><Button label={`1 ${t('裁剪')}`} selected={stage === 'crop'} disabled={locked} onPress={() => changeStage('crop')} small /></View>
@@ -181,37 +179,43 @@ export default function App(): React.JSX.Element {
     </View>}
     <ScrollView ref={scroll} style={s.flex} onLayout={event => setViewport(event.nativeEvent.layout.height)} contentContainerStyle={s.content}>
       {!selection ? <View style={s.empty}>
-        <Image source={require('./assets/icon.png')} style={s.icon} />
+        <Image source={require('./assets/icon.png')} style={s.icon} accessibilityLabel="Local Image logo" />
         <Text style={s.body}>{t('全程离线 · 原图保留')}</Text>
-        <Text style={s.hint}>{t('选图直插跳过编辑预览，直接使用原文件。')}</Text>
+        <Text style={s.hint}>{t('直接插入：选好后直接插入原文件。')}</Text>
       </View> : <>
         <View onLayout={event => setTopHeight(event.nativeEvent.layout.height)} style={s.top}>
           <View style={s.row}>
             {stage === 'crop' ? <>
               <View style={s.flex}><Button label={t('左上角')} selected={corner === 'topLeft'} onPress={() => setCorner('topLeft')} disabled={locked} small /></View>
               <View style={s.flex}><Button label={t('右下角')} selected={corner === 'bottomRight'} onPress={() => setCorner('bottomRight')} disabled={locked} small /></View>
-              <View style={s.flex}><Button label={t('还原全图')} onPress={() => setCrop({...FULL_CROP})} disabled={locked} small /></View>
+              <ResetButton label={t('还原全图')} onPress={() => setCrop({...FULL_CROP})} disabled={locked} />
             </> : <>
-              <View style={s.flex}><Button label={t('还原灰阶')} onPress={() => {setTone({...NEUTRAL}); setCompare(false); setMessage('');}} disabled={locked} small /></View>
-              <View style={s.flex}><Button label={t(compare ? '看调整效果' : '对比原灰阶')} onPress={() => setCompare(!compare)} disabled={locked || !preview || dirty || previewStatus !== 'idle'} selected={compare} small /></View>
-              <View style={s.flex}><Button label={t(previewError ? '重试预览' : '立即更新')} onPress={refresh} disabled={locked} small /></View>
+              <View style={s.flex}><TonePresets tone={tone} setTone={changeTone} disabled={locked} /></View>
+              <ResetButton label={t('还原灰阶')} onPress={() => {if (previewError) {neutralCache.current = null;} changeTone({...NEUTRAL, opaqueWhite: tone.opaqueWhite});}} disabled={locked} />
             </>}
           </View>
           <Text style={s.hint}>{t(stage === 'crop' ? '选择一个角，再点图定位；触控笔更精确。拖动后松手更新。' : statusText)}</Text>
         </View>
         {stage === 'crop' ? <>
           {base ? <CropCanvas image={base} crop={crop} corner={corner} setCrop={setCrop} disabled={locked} height={height} />
-            : <View style={[s.placeholder, {height}]}><Text style={s.hint}>{t('选图直插跳过编辑预览，直接使用原文件。')}</Text></View>}
+            : <View style={[s.placeholder, {height}]}><Text style={s.hint}>{t('直接插入：选好后直接插入原文件。')}</Text></View>}
         </> : <>
           <View style={[s.preview, {height}]}>
             {display && <Image key={display.path} source={{uri: fileUri(display.path)}} resizeMode="contain" style={s.full}
               accessibilityLabel={t(compare ? '原始灰阶（已裁剪）' : '调整后的效果')}
-              onError={() => {setPreviewError(true); setMessage('预览文件读取失败，请重试预览。');}} />}
+              onError={() => {setPreviewError(true); setMessage('预览文件读取失败，请调整参数或还原灰阶重试。');}} />}
+            <CompareButton compare={compare} onPress={() => setCompare(!compare)}
+              disabled={locked || !preview || dirty || previewError || previewStatus !== 'idle'} />
           </View>
           <View onLayout={event => setBottomHeight(event.nativeEvent.layout.height)} style={s.bottom}>
-            {display && <Histogram result={display} />}
-            <ToneControls tone={tone} setTone={value => {setTone(value); setCompare(false); setMessage('');}} disabled={locked} />
-            {tone.autoLevels && <Text style={s.hint}>{t('自动黑白点')}</Text>}
+            <View style={s.histogram}>{display && <Histogram result={display} />}</View>
+            <ToneControls tone={tone} setTone={changeTone} disabled={locked} />
+            <View style={s.row}>
+              <Button small secondary selected={tone.opaqueWhite} label={`${tone.opaqueWhite ? '☑' : '☐'} ${t('白底遮线（实验）')}`}
+                accessibilityLabel={t('白底遮线（实验）')} disabled={locked} onPress={() => {setTone({...tone, opaqueWhite: !tone.opaqueWhite}); setCompare(false); setMessage('');}} />
+              <Text style={[s.hint, s.flex]}>{tone.autoLevels ? t('自动黑白点') : ' '}</Text>
+            </View>
+            <Text style={s.hint}>{t('仅白色区域遮线，灰色区域仍可能透线。')}</Text>
           </View>
         </>}
       </>}
@@ -224,18 +228,17 @@ export default function App(): React.JSX.Element {
           <View style={s.flex}><Button label={t('插入原图')} disabled={locked} onPress={() => void insert(false)} /></View>
           <View style={s.flex}>{stage === 'crop'
             ? <Button label={t('下一步：灰阶')} primary disabled={locked || !base} onPress={() => changeStage('tone')} />
-            : <Button label={t(submitted ? '已提交' : dirty || previewStatus !== 'idle' ? '等待预览' : '插入效果')} primary
+            : <Button label={t(submitted ? '已提交' : dirty || previewStatus !== 'idle' ? '等待预览' : '插入编辑后的图片')} primary
               disabled={locked || dirty || previewError || compare || previewStatus !== 'idle'} onPress={() => void insert(true)} />}</View>
         </View>
         <Text style={s.hint} numberOfLines={1}>{t('目标')}: {basename(selection.target.path)} · {t('页')} {selection.target.page + 1}</Text>
-      </> : <Text style={s.hint}>Local Image 0.3.0</Text>}
+      </> : <Text style={s.hint}>Local Image 0.4.2</Text>}
     </View>
   </SafeAreaView>;
 }
 const s = StyleSheet.create({
   screen: {flex: 1, backgroundColor: '#fff'}, flex: {flex: 1}, row: {flexDirection: 'row', gap: 6, alignItems: 'center'},
-  header: {paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderColor: '#111', flexDirection: 'row', gap: 8, alignItems: 'center'},
-  title: {fontSize: 21, fontWeight: '700', color: '#111'},
+  histogram: {height: 18},
   fileRow: {flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6},
   tabs: {flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingBottom: 4},
   content: {flexGrow: 1, paddingHorizontal: 12, paddingVertical: 4, width: '100%'},

@@ -156,7 +156,8 @@ public final class LocalImageProcessor extends ReactContextBaseJavaModule {
             }
             int[] lookup = ToneMath.lookup(params.getDouble("brightness"), params.getDouble("contrast"),
                 params.getDouble("shadows"), params.getDouble("highlights"), black, white);
-            int[] after = ToneMath.apply(pixels, lookup);
+            boolean opaqueWhite = params.hasKey("opaqueWhite") && params.getBoolean("opaqueWhite");
+            int[] after = ToneMath.apply(pixels, lookup, opaqueWhite);
             output = Bitmap.createBitmap(pixels, outWidth, outHeight, Bitmap.Config.ARGB_8888);
             File directory = outputDirectory(pluginRoot, exporting);
             String prefix = exporting ? "adjusted-" : mode + "-";
@@ -177,7 +178,7 @@ public final class LocalImageProcessor extends ReactContextBaseJavaModule {
             }
             result.putArray("histogram", histogram);
             result.putDouble("darkPercent", after[0] * 100.0 / pixels.length);
-            result.putDouble("lightPercent", after[255] * 100.0 / pixels.length);
+            result.putDouble("lightPercent", (after[255] + (opaqueWhite ? after[254] : 0)) * 100.0 / pixels.length);
             if (!exporting) trimPreviews(directory, prefix, destination);
             completed = true;
             return result;

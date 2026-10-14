@@ -102,6 +102,24 @@ public final class ToneMathTest {
             try {ToneMath.lookup(9, 0, 0, 0, 0, 255);} catch (IllegalArgumentException e) {threw = true;}
             truth(threw);
         });
+        test("white masking changes only pure white and remains opaque", () -> {
+            int[] pixels = new int[256];
+            for (int i = 0; i < 256; i++) pixels[i] = gray(i);
+            int[] hist = ToneMath.apply(pixels, ToneMath.lookup(0,0,0,0,0,255), true);
+            for (int i = 0; i < 255; i++) equal(pixels[i], gray(i));
+            equal(pixels[255], gray(254)); equal(hist[255], 0); equal(hist[254], 2);
+            equal(Arrays.stream(hist).sum(), 256);
+        });
+        test("white masking happens after tone clips highlights to white", () -> {
+            int[] pixels = {gray(220), gray(255), 0x00000000};
+            ToneMath.apply(pixels, ToneMath.lookup(0,0,0,0,20,200), true);
+            for (int pixel : pixels) equal(pixel, gray(254));
+        });
+        test("default output still preserves pure white", () -> {
+            int[] pixels = {gray(255)};
+            ToneMath.apply(pixels, ToneMath.lookup(0,0,0,0,0,255), false);
+            equal(pixels[0], gray(255));
+        });
         writeComparison(new File(args[0], "tone-comparison.png"));
         System.out.println("Native pixel engine: " + passed + " tests passed; comparison image generated.");
     }

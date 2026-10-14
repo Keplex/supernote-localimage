@@ -1,5 +1,5 @@
 export type PreviewStatus = 'idle' | 'waiting' | 'rendering';
-export const PREVIEW_DELAY = 1200;
+export const PREVIEW_DELAY = 500;
 
 /** One render at a time; only the latest settled input may reach the screen. */
 export class PreviewQueue<Input, Output> {

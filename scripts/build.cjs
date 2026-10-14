@@ -32,6 +32,7 @@ execFileSync(process.execPath, [require.resolve('react-native/cli.js'), 'bundle'
 
 const icon = path.basename(config.iconPath);
 fs.copyFileSync(path.join(root, config.iconPath), path.join(generated, icon));
+fs.copyFileSync(path.join(root, 'LICENSE'), path.join(generated, 'LICENSE'));
 const npk = buildNative();
 fs.copyFileSync(npk, path.join(generated, 'app.npk'));
 fs.writeFileSync(path.join(generated, 'PluginConfig.json'), JSON.stringify({...config, iconPath: '/' + icon,
@@ -73,7 +74,7 @@ function collect(dir, prefix = '') {
 collect(generated);
 const buffer = zipSync(files, {level: 9});
 const verified = unzipSync(buffer);
-for (const required of ['PluginConfig.json', 'LocalImage.bundle', 'icon.png', 'drawable-mdpi/assets_icon.png', 'THIRD-PARTY-NOTICES.txt', 'app.npk']) {
+for (const required of ['PluginConfig.json', 'LocalImage.bundle', 'icon.png', 'drawable-mdpi/assets_icon.png', 'THIRD-PARTY-NOTICES.txt', 'app.npk', 'LICENSE', 'drawable-mdpi/assets_bolt.png', 'drawable-mdpi/assets_reset.png', 'drawable-mdpi/assets_compare.png', 'drawable-mdpi/assets_comparewhite.png']) {
   if (!verified[required]?.length) {throw Error('Missing package member: ' + required);}
 }
 const output = path.join(buildRoot, 'outputs');

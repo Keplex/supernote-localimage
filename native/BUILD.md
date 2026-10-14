@@ -76,13 +76,16 @@ the native package alongside the JavaScript bundle, icon and notices:
 }
 ```
 
-The outer archive is `build/outputs/LocalImage-0.3.0.snplg`. Install that complete
+The outer archive is `build/outputs/LocalImage-0.4.2.snplg`. Install that complete
 file through Supernote's plugin manager. The source config's stable plugin ID
 must be retained for updates; increase `versionCode` for a new release.
 
 The package contains no Android SDK, JDK, third-party native library or signing
-key. Version 0.2.0 has been tested by the user on a physical device. The 0.3.0
-layout, language preference persistence and timing still need device validation.
+key. Version 0.2.0 has been tested by the user on a physical device. The 0.4.2
+layout, selection after insertion, experimental white masking and timing still
+need device validation. The package includes the project's MIT LICENSE and
+THIRD-PARTY-NOTICES.txt. The optional white mask maps final grayscale 255 to 254
+after resampling and tone processing; direct original insertion bypasses it.
 
 Optional layout checks use the actual component tree and a CSS approximation of
 React Native styles. Set `LOCALIMAGE_LAYOUT_QA=1`, `LOCALIMAGE_PLAYWRIGHT` to the

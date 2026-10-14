@@ -74,9 +74,9 @@ async function press(view, label) {
 }
 async function unmount(view) {await act(async () => {view.unmount(); await flush();});}
 
-test('Pick & insert bypasses every preview/export and inserts original exactly once', async () => {
+test('Insert directly bypasses every preview/export and inserts original exactly once', async () => {
   const view = await mount();
-  await act(async () => {const pick = button(view, '选图直插'); pick.props.onPress(); pick.props.onPress(); await flush();});
+  await act(async () => {const pick = button(view, '⚡ 直接插入'); pick.props.onPress(); pick.props.onPress(); await flush();});
   assert.deepEqual(renders, []); assert.deepEqual(insertions, [originalPath]);
   assert.equal(saves, 1); assert.equal(closes, 1); await unmount(view);
 });
@@ -90,16 +90,16 @@ test('editing screen also inserts the original without export when asked', async
 test('actual tone controls auto-refresh, block dirty inserts and export the latest recipe', async context => {
   context.mock.timers.enable({apis: ['setTimeout']});
   const view = await mount(); await press(view, '选择并编辑'); await press(view, '下一步：灰阶');
-  await act(async () => {context.mock.timers.tick(1200); await flush();});
-  assert.ok(!button(view, '插入效果').props.disabled);
+  await act(async () => {context.mock.timers.tick(500); await flush();});
+  assert.ok(!button(view, '插入编辑后的图片').props.disabled);
   await press(view, '亮度 +'); await press(view, '亮度 +');
   assert.ok(button(view, '等待预览').props.disabled);
-  await act(async () => {context.mock.timers.tick(1199); await flush();});
+  await act(async () => {context.mock.timers.tick(499); await flush();});
   assert.equal(renders.length, 1);
   await act(async () => {context.mock.timers.tick(1); await flush();});
   assert.equal(renders.length, 2); assert.equal(renders[1].recipe.brightness, 2);
-  await press(view, '对比原灰阶'); assert.ok(button(view, '插入效果').props.disabled);
-  await press(view, '看调整效果'); await press(view, '插入效果');
+  await press(view, '对比原灰阶'); assert.ok(button(view, '插入编辑后的图片').props.disabled);
+  await press(view, '看调整效果'); await press(view, '插入编辑后的图片');
   assert.equal(renders.at(-1).mode, 'export'); assert.equal(renders.at(-1).recipe.brightness, 2);
   assert.match(insertions[0], /export-/); await unmount(view);
 });
@@ -107,18 +107,19 @@ test('English switch is persisted, translates controls, and survives reopening',
   let view = await mount(); await press(view, '中文 / English');
   assert.equal(storedLanguage, 'en'); assert.ok(button(view, 'Choose & edit'));
   await press(view, 'Choose & edit'); await press(view, 'Next: tone');
-  for (const label of ['Reset tone', 'Compare original', 'Refresh now', 'Lift shadows +', 'Lower highlights +']) {assert.ok(button(view, label));}
-  await unmount(view); view = await mount(); assert.ok(button(view, 'Pick & insert')); await unmount(view);
+  for (const label of ['↺ Reset tone', 'Compare original', 'Lift shadows +', 'Lower highlights +']) {assert.ok(button(view, label));}
+  await unmount(view); view = await mount(); assert.ok(button(view, '⚡ Insert directly')); await unmount(view);
 });
-test('failed automatic refresh does not loop and retry is visible above the preview', async context => {
+test('failed automatic refresh does not loop; resetting tone automatically retries', async context => {
   context.mock.timers.enable({apis: ['setTimeout']});
   const view = await mount(); await press(view, '选择并编辑'); await press(view, '下一步：灰阶');
   await press(view, '亮度 +'); renderFailure = true;
-  await act(async () => {context.mock.timers.tick(1200); await flush();});
-  assert.ok(button(view, '重试预览')); assert.ok(button(view, '等待预览').props.disabled);
+  await act(async () => {context.mock.timers.tick(500); await flush();});
+  assert.equal(button(view, '立即更新'), undefined); assert.ok(button(view, '等待预览').props.disabled);
   const count = renders.length;
   await act(async () => {context.mock.timers.tick(10000); await flush();}); assert.equal(renders.length, count);
-  renderFailure = false; await press(view, '重试预览'); assert.ok(!button(view, '插入效果').props.disabled);
+  renderFailure = false; await press(view, '↺ 还原灰阶');
+  await act(async () => {context.mock.timers.tick(500); await flush();}); assert.ok(!button(view, '插入编辑后的图片').props.disabled);
   await unmount(view);
 });
 test('leaving tone cancels a delayed refresh and a cancelled picker never inserts', async context => {
@@ -127,10 +128,43 @@ test('leaving tone cancels a delayed refresh and a cancelled picker never insert
   await press(view, '亮度 +'); await press(view, '1 裁剪');
   await act(async () => {context.mock.timers.tick(5000); await flush();});
   assert.deepEqual(renders.map(r => r.mode), ['base']);
-  selectionCancelled = true; await press(view, '选图直插'); assert.deepEqual(insertions, []); await unmount(view);
+  selectionCancelled = true; await press(view, '换一张'); assert.deepEqual(insertions, []); await unmount(view);
 });
 
 // Optional desktop layout check using actual rendered component styles.
+test('About is bilingual, displays MIT license, and returns to the current editing session', async context => {
+  context.mock.timers.enable({apis: ['setTimeout']});
+  const view = await mount();
+  assert.ok(button(view, '← 返回笔记')); assert.ok(button(view, '⚡ 直接插入'));
+  await press(view, '选择并编辑'); assert.equal(button(view, '⚡ 直接插入'), undefined);
+  assert.ok(button(view, '↺ 还原全图'));
+  await press(view, '下一步：灰阶'); await press(view, '亮度 +');
+  await press(view, '关于');
+  assert.match(JSON.stringify(view.toJSON()), /Keplex/);
+  await press(view, '查看 MIT 许可证全文'); assert.match(JSON.stringify(view.toJSON()), /Permission is hereby granted/);
+  await act(async () => {context.mock.timers.tick(500); await flush();});
+  assert.equal(renders.length, 1);
+  await press(view, '← 返回编辑');
+  await act(async () => {context.mock.timers.tick(500); await flush();});
+  assert.equal(renders.at(-1).recipe.brightness, 1);
+  assert.equal(button(view, '立即更新'), undefined);
+  await press(view, '中文 / English'); await press(view, 'About');
+  assert.match(JSON.stringify(view.toJSON()), /Developer: Keplex/);
+  await press(view, '← Back to editor'); assert.ok(button(view, 'Insert edited image'));
+  await unmount(view);
+});
+test('white masking starts off, survives tone presets/reset and reaches export', async context => {
+  context.mock.timers.enable({apis: ['setTimeout']});
+  const view = await mount(); await press(view, '选择并编辑'); await press(view, '下一步：灰阶');
+  assert.equal(button(view, '白底遮线（实验）').props.accessibilityState.selected, false);
+  await press(view, '白底遮线（实验）'); await press(view, '均衡'); await press(view, '↺ 还原灰阶');
+  assert.equal(button(view, '白底遮线（实验）').props.accessibilityState.selected, true);
+  await act(async () => {context.mock.timers.tick(500); await flush();});
+  assert.equal(renders.at(-1).recipe.opaqueWhite, true);
+  await press(view, '插入编辑后的图片'); assert.equal(renders.at(-1).mode, 'export');
+  assert.equal(renders.at(-1).recipe.opaqueWhite, true); await unmount(view);
+});
+
 // It approximates native layout and cannot verify e-ink refresh or Android font metrics.
 if (process.env.LOCALIMAGE_LAYOUT_QA) {
   test('desktop layout snapshots fit crop/tone in Chinese and English', async () => {

@@ -61,9 +61,15 @@ public final class ToneMath {
     }
 
     public static int[] apply(int[] pixels, int[] lookup) {
+        return apply(pixels, lookup, false);
+    }
+
+    /** Supernote treats #FEFEFE as white ink; applied after resizing and tone. */
+    public static int[] apply(int[] pixels, int[] lookup, boolean opaqueWhite) {
         int[] histogram = new int[256];
         for (int i = 0; i < pixels.length; i++) {
             int gray = lookup[luminanceOnWhite(pixels[i])];
+            if (opaqueWhite && gray == 255) gray = 254;
             histogram[gray]++;
             pixels[i] = 0xff000000 | (gray << 16) | (gray << 8) | gray;
         }

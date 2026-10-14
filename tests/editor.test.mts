@@ -43,11 +43,13 @@ test('crop or tone changes invalidate the preview key', () => {
   assert.notEqual(key, recipeKey({...FULL_CROP, left: 0.1}, NEUTRAL));
   assert.notEqual(key, recipeKey(FULL_CROP, {...NEUTRAL, brightness: 1}));
   assert.notEqual(key, recipeKey(FULL_CROP, {...NEUTRAL, autoLevels: true}));
+  assert.notEqual(key, recipeKey(FULL_CROP, {...NEUTRAL, opaqueWhite: true}));
 });
 test('export freezes the exact black/white points that were used by preview', () => {
   const result = {path: '/preview.png', width: 100, height: 100, black: 35, white: 215,
     histogram: [], darkPercent: 0, lightPercent: 0};
-  const recipe = resolvedRecipe(FULL_CROP, {...NEUTRAL, autoLevels: true, brightness: 2}, result);
+  const recipe = resolvedRecipe(FULL_CROP, {...NEUTRAL, autoLevels: true, brightness: 2, opaqueWhite: true}, result);
   assert.equal(recipe.black, 35); assert.equal(recipe.white, 215);
   assert.equal(recipe.autoLevels, false); assert.equal(recipe.brightness, 2);
+  assert.equal(recipe.opaqueWhite, true);
 });

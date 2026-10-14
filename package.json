@@ -1,7 +1,9 @@
 {
   "name": "LocalImage",
-  "version": "0.3.0",
+  "version": "0.4.2",
   "private": true,
+  "author": "Keplex",
+  "license": "MIT",
   "description": "Insert a local PNG or JPEG into the current Supernote note page.",
   "scripts": {
     "typecheck": "tsc --noEmit",
