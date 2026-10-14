@@ -12,8 +12,8 @@ for (const ext of ['.ts', '.tsx']) {
   }).code, file);
 }
 const originalPath = '/storage/emulated/0/MyStyle/original.jpg';
-let renders, insertions, saves, closes, storedLanguage, selectionCancelled, renderFailure;
-let renderHook;
+let renders, insertions, saves, closes, reopens, toasts, storedLanguage, selectionCancelled, renderFailure;
+let renderHook, insertHook, closeFailure, reopenFailure;
 const image = path => ({path, width: 800, height: 600, black: 0, white: 255,
   histogram: new Array(16).fill(20), darkPercent: 0, lightPercent: 0});
 const processor = {
@@ -33,18 +33,20 @@ const sdk = {
     registerButtonListener() {return {remove() {}};},
     async hasPermission() {return 1;}, async requestPermission() {return 1;},
     async getPluginDirPath() {return '/private/plugins/limg26nomad00001';},
-    async closePluginView() {closes++; return true;},
+    async closePluginView() {closes++; return !closeFailure;},
+    async showPluginView() {reopens++; return !reopenFailure;},
   },
   PluginCommAPI: {async getCurrentFilePath() {return {success: true, result: '/Note/Test.note'};},
     async getCurrentPageNum() {return {success: true, result: 0};}},
   FileUtils: {async exists() {return true;}},
   RattaFileSelector: {async selectFile() {return selectionCancelled ? null : [originalPath];}},
-  PluginNoteAPI: {async insertImage(path) {insertions.push(path); return {success: true, result: true};},
+  PluginNoteAPI: {async insertImage(path) {insertions.push(path); return insertHook ? insertHook() : {success: true, result: true};},
     async saveCurrentNote() {saves++; return {success: true, result: true};}},
 };
 const NativeImage = props => React.createElement('Image', props);
 NativeImage.resolveAssetSource = () => ({uri: 'icon.png'});
 const native = {Image: NativeImage, NativeModules: {LocalImageProcessor: processor},
+  ToastAndroid: {LONG: 1, show: message => {toasts.push(message);}},
   StyleSheet: {create: value => value, absoluteFill: {position: 'absolute', top: 0, bottom: 0, left: 0, right: 0}},
   BackHandler: {addEventListener: () => ({remove() {}})}};
 for (const name of ['SafeAreaView', 'ScrollView', 'StatusBar', 'Text', 'View', 'Pressable']) {native[name] = name;}
@@ -59,8 +61,9 @@ const App = require('../App.tsx').default;
 const {setLanguage} = require('../src/i18n.ts');
 const flush = async () => {for (let i = 0; i < 30; i++) {await Promise.resolve();}};
 beforeEach(() => {
-  renders = []; insertions = []; saves = 0; closes = 0; storedLanguage = 'zh';
-  selectionCancelled = false; renderFailure = false; renderHook = null; setLanguage('zh');
+  renders = []; insertions = []; saves = 0; closes = 0; reopens = 0; toasts = []; storedLanguage = 'zh';
+  selectionCancelled = false; renderFailure = false; renderHook = null; insertHook = null;
+  closeFailure = false; reopenFailure = false; setLanguage('zh');
 });
 async function mount() {
   let view;
@@ -78,7 +81,7 @@ test('Insert directly bypasses every preview/export and inserts original exactly
   const view = await mount();
   await act(async () => {const pick = button(view, '⚡ 直接插入'); pick.props.onPress(); pick.props.onPress(); await flush();});
   assert.deepEqual(renders, []); assert.deepEqual(insertions, [originalPath]);
-  assert.equal(saves, 1); assert.equal(closes, 1); await unmount(view);
+  assert.equal(saves, 0); assert.equal(closes, 1); await unmount(view);
 });
 test('editing screen also inserts the original without export when asked', async () => {
   const view = await mount(); await press(view, '选择并编辑');
@@ -135,7 +138,8 @@ test('leaving tone cancels a delayed refresh and a cancelled picker never insert
 test('About is bilingual, displays MIT license, and returns to the current editing session', async context => {
   context.mock.timers.enable({apis: ['setTimeout']});
   const view = await mount();
-  assert.ok(button(view, '← 返回笔记')); assert.ok(button(view, '⚡ 直接插入'));
+  assert.ok(button(view, '返回笔记')); assert.ok(button(view, '⚡ 直接插入'));
+  assert.match(JSON.stringify(view.toJSON()), /Test.note/);
   await press(view, '选择并编辑'); assert.equal(button(view, '⚡ 直接插入'), undefined);
   assert.ok(button(view, '↺ 还原全图'));
   await press(view, '下一步：灰阶'); await press(view, '亮度 +');
@@ -144,14 +148,50 @@ test('About is bilingual, displays MIT license, and returns to the current editi
   await press(view, '查看 MIT 许可证全文'); assert.match(JSON.stringify(view.toJSON()), /Permission is hereby granted/);
   await act(async () => {context.mock.timers.tick(500); await flush();});
   assert.equal(renders.length, 1);
-  await press(view, '← 返回编辑');
+  await press(view, '关于');
   await act(async () => {context.mock.timers.tick(500); await flush();});
   assert.equal(renders.at(-1).recipe.brightness, 1);
   assert.equal(button(view, '立即更新'), undefined);
   await press(view, '中文 / English'); await press(view, 'About');
   assert.match(JSON.stringify(view.toJSON()), /Developer: Keplex/);
-  await press(view, '← Back to editor'); assert.ok(button(view, 'Insert edited image'));
+  await press(view, 'About'); assert.ok(button(view, 'Insert edited image'));
   await unmount(view);
+});
+
+test('the note-name return button closes the plugin from About', async () => {
+  const view = await mount(); await press(view, '关于');
+  assert.match(JSON.stringify(view.toJSON()), /Test.note/);
+  await press(view, '返回笔记'); assert.equal(closes, 1); await unmount(view);
+});
+
+test('late insert failure reopens the plugin and keeps duplicate insertion blocked', async () => {
+  const view = await mount();
+  let reject;
+  insertHook = () => new Promise((_, fail) => {reject = fail;});
+  await press(view, '⚡ 直接插入');
+  assert.equal(closes, 1); assert.equal(reopens, 0);
+  await act(async () => {reject(Error('bridge lost')); await flush();});
+  assert.equal(reopens, 1); assert.equal(saves, 0);
+  assert.match(JSON.stringify(view.toJSON()), /返回笔记检查/);
+  assert.ok(button(view, '插入原图').props.disabled);
+  assert.equal(insertions.length, 1); await unmount(view);
+});
+
+test('a failed error-overlay reopen falls back to a native toast', async () => {
+  const view = await mount(); reopenFailure = true;
+  insertHook = async () => ({success: false, error: {code: 1217}});
+  await press(view, '⚡ 直接插入');
+  assert.equal(reopens, 1); assert.equal(toasts.length, 1); assert.match(toasts[0], /1217/);
+  assert.equal(insertions.length, 1); await unmount(view);
+});
+
+test('failed note handoff offers manual return without repeating a successful insertion', async () => {
+  const view = await mount(); closeFailure = true;
+  await press(view, '⚡ 直接插入');
+  assert.match(JSON.stringify(view.toJSON()), /图片已插入，但暂时无法返回笔记/);
+  assert.equal(insertions.length, 1); assert.equal(saves, 0); assert.equal(closes, 1);
+  closeFailure = false; await press(view, '返回笔记');
+  assert.equal(closes, 2); assert.equal(insertions.length, 1); await unmount(view);
 });
 test('white masking starts off, survives tone presets/reset and reaches export', async context => {
   context.mock.timers.enable({apis: ['setTimeout']});

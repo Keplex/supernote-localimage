@@ -98,7 +98,7 @@ export function Histogram({result}: {result: RenderResult}) {
 const s = StyleSheet.create({
   row: {flexDirection: 'row', gap: 6, alignItems: 'center'}, flex: {flex: 1},
   hint: {fontSize: 12, lineHeight: 18, color: '#333'},
-  button: {minHeight: 44, paddingVertical: 7, paddingHorizontal: 10, borderWidth: 1.5, borderColor: '#111', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', flexDirection: 'row', gap: 5},
+  button: {minHeight: 44, paddingVertical: 7, paddingHorizontal: 10, borderWidth: 1.5, borderRadius: 4, borderColor: '#111', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', flexDirection: 'row', gap: 5},
   buttonIcon: {width: 18, height: 18},
   buttonText: {fontSize: 16, lineHeight: 20, fontWeight: '600', color: '#111', textAlign: 'center'},
   small: {paddingHorizontal: 7, minHeight: 40, minWidth: 36}, smallText: {fontSize: 14, lineHeight: 18},
@@ -107,7 +107,7 @@ const s = StyleSheet.create({
   compare: {position: 'absolute', top: 8, right: 8, zIndex: 1, width: 44, height: 44, borderRadius: 22, borderWidth: 1,
     borderColor: '#333', backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center'},
   compareIcon: {width: 24, height: 24},
-  canvas: {backgroundColor: '#eee', overflow: 'hidden'}, full: {height: '100%', width: '100%'},
+  canvas: {backgroundColor: '#fff', overflow: 'hidden'}, full: {height: '100%', width: '100%'},
   shade: {position: 'absolute', backgroundColor: '#fff', opacity: 0.75},
   cropBorder: {position: 'absolute', borderColor: '#000', borderWidth: 2, borderStyle: 'dashed'},
   handle: {position: 'absolute', width: 14, height: 14, borderColor: '#000', borderWidth: 2, backgroundColor: '#fff'}, activeHandle: {backgroundColor: '#000'},

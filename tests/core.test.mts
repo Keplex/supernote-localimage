@@ -1,7 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {ImageController, READ, WRITE, fileUri, imagePath, validateDimensions} from '../src/core.ts';
-import type {Dependencies} from '../src/core.ts';
 
 const ok = (result: unknown) => ({success: true, result, error: null});
 function fixture() {
@@ -21,21 +20,23 @@ function fixture() {
     async exists(_p: string) {return state.exists;},
     async measure(_uri: string) {return {width: state.width, height: state.height};},
     async insert(_p: string): Promise<unknown> {calls.push('insert'); return ok(true);},
+    async returnToNote(): Promise<boolean> {calls.push('close'); return true;},
     async save(): Promise<unknown> {calls.push('save'); return ok(true);},
   };
   return {state, calls, deps, controller: new ImageController(deps)};
 }
 
-test('successful selection and insertion use exact path, current page, permissions and save', async () => {
+test('successful insertion hands off without saving or rebuilding selection', async () => {
   const f = fixture();
   const image = await f.controller.pick();
   assert.equal(image?.path, f.state.paths?.[0]);
   assert.equal(image?.target.page, 2);
   assert.match(image!.uri, /%23/);
-  assert.deepEqual(await f.controller.insert(), {saved: true});
+  assert.deepEqual(await f.controller.insert(), {inserted: true, returned: true});
   assert.equal(f.controller.canInsert, false);
   assert.ok(f.calls.indexOf('check:' + WRITE) < f.calls.indexOf('insert'));
-  assert.ok(f.calls.indexOf('insert') < f.calls.indexOf('save'));
+  assert.ok(f.calls.indexOf('insert') < f.calls.indexOf('close'));
+  assert.ok(!f.calls.includes('save'));
   assert.equal(f.calls.filter(c => c === 'insert').length, 1);
   await assert.rejects(f.controller.insert(), /重复提交/);
 });
@@ -79,7 +80,7 @@ test('revoked write permission prevents insertion but allows retry after grant',
   assert.equal(f.controller.canInsert, true);
   assert.ok(!f.calls.includes('insert'));
   f.state.choice = 2;
-  assert.equal((await f.controller.insert()).saved, true);
+  assert.equal((await f.controller.insert()).inserted, true);
 });
 
 test('reject unsupported extensions and non-file URIs', () => {
@@ -163,20 +164,48 @@ for (const mode of ['reject', 'null', 'malformed']) {
   });
 }
 
-for (const mode of ['false', 'reject', 'null']) {
-  test(`save ${mode} reports inserted but unconfirmed save and prevents duplicate`, async () => {
+for (const mode of ['false', 'reject']) {
+  test(`return ${mode} reports successful insertion and prevents duplicate`, async () => {
     const f = fixture(); await f.controller.pick();
-    f.deps.save = async () => {
-      if (mode === 'reject') {throw new Error('save failed');}
-      return mode === 'null' ? null : ok(false);
+    f.deps.returnToNote = async () => {
+      f.calls.push('close');
+      if (mode === 'reject') {throw new Error('close failed');}
+      return false;
     };
     const result = await f.controller.insert();
-    assert.equal(result.saved, false);
+    assert.equal(result.inserted, true); assert.equal(result.returned, false);
     assert.match(result.warning!, /图片已插入/);
     await assert.rejects(f.controller.insert(), /重复提交/);
     assert.equal(f.calls.filter(c => c === 'insert').length, 1);
+    assert.equal(f.calls.filter(c => c === 'close').length, 1);
+    assert.ok(!f.calls.includes('save'));
   });
 }
+
+test('return begins before a pending insertion resolves', async () => {
+  const f = fixture(); await f.controller.pick();
+  let release!: (value: unknown) => void;
+  const pending = new Promise<unknown>(resolve => {release = resolve;});
+  f.deps.insert = () => {f.calls.push('insert'); return pending;};
+  const result = f.controller.insert();
+  for (let i = 0; i < 30; i++) {await Promise.resolve();}
+  assert.deepEqual(f.calls.filter(c => ['insert', 'close', 'save'].includes(c)), ['insert', 'close']);
+  release(ok(true));
+  assert.deepEqual(await result, {inserted: true, returned: true});
+});
+
+test('an insertion rejected after handoff remains consumed and is never retried', async () => {
+  const f = fixture(); await f.controller.pick();
+  let reject!: (error: Error) => void;
+  f.deps.insert = () => {f.calls.push('insert'); return new Promise((_, fail) => {reject = fail;});};
+  const result = f.controller.insert();
+  for (let i = 0; i < 30; i++) {await Promise.resolve();}
+  assert.ok(f.calls.includes('close'));
+  reject(new Error('bridge lost'));
+  await assert.rejects(result, /返回笔记检查/);
+  await assert.rejects(f.controller.insert(), /重复提交/);
+  assert.equal(f.calls.filter(c => c === 'insert').length, 1);
+});
 
 test('concurrent taps cannot insert twice or launch picker during mutation', async () => {
   const f = fixture(); await f.controller.pick();
@@ -227,23 +256,4 @@ test('denying write permission stops export before any file is created', async (
   let called = false;
   await assert.rejects(f.controller.insert(async () => {called = true; return '/adjusted.png';}));
   assert.equal(called, false);
-});
-test('selection hooks surround insertion/save, and failed selection never retries insertion', async () => {
-  const f = fixture(); const deps = f.deps as Dependencies;
-  deps.captureSelection = async () => {f.calls.push('capture'); return [1];};
-  deps.selectInserted = async (_, snapshot) => {
-    assert.deepEqual(snapshot, [1]); f.calls.push('select'); throw Error('unsupported');
-  };
-  await f.controller.pick(); assert.deepEqual(await f.controller.insert(), {saved: true});
-  assert.deepEqual(f.calls.filter(c => ['capture', 'insert', 'save', 'select'].includes(c)), ['capture', 'insert', 'save', 'select']);
-  await assert.rejects(f.controller.insert(), /重复提交/);
-});
-test('failed optional capture does not prevent insertion', async () => {
-  const f = fixture(); (f.deps as Dependencies).captureSelection = async () => {throw Error('unsupported');};
-  await f.controller.pick(); assert.deepEqual(await f.controller.insert(), {saved: true});
-});
-test('context is checked again after optional selection metadata reads', async () => {
-  const f = fixture(); (f.deps as Dependencies).captureSelection = async () => {f.state.page++; return [];};
-  await f.controller.pick(); await assert.rejects(f.controller.insert(), /页码已变化/);
-  assert.ok(!f.calls.includes('insert'));
 });

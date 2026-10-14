@@ -13,9 +13,7 @@ export interface Dependencies {
   exists(path: string): Promise<boolean>;
   measure(uri: string): Promise<{width: number; height: number}>;
   insert(path: string): Promise<unknown>;
-  save(): Promise<unknown>;
-  captureSelection?(context: Context): Promise<unknown>;
-  selectInserted?(context: Context, snapshot: unknown): Promise<void>;
+  returnToNote(): Promise<boolean>;
 }
 
 export async function ensurePermission(deps: Pick<Dependencies, 'hasPermission' | 'requestPermission'>, name: string): Promise<void> {
@@ -145,7 +143,7 @@ export class ImageController {
     } finally {this.busy = false;}
   }
 
-  async insert(prepare?: (selection: Selection) => Promise<string>): Promise<{saved: boolean; warning?: string}> {
+  async insert(prepare?: (selection: Selection) => Promise<string>): Promise<{inserted: true; returned: boolean; warning?: string}> {
     if (this.busy) {throw new Error('操作进行中，请勿重复点击。');}
     if (!this.selected || this.consumed) {throw new Error('请先选择图片；已提交的图片不能重复提交。');}
     this.busy = true;
@@ -157,8 +155,6 @@ export class ImageController {
       // The editor exports only after write permission. A failed export never falls back to the source.
       const insertionPath = prepare ? imagePath(await prepare({...selection})) : selection.path;
       if (prepare && !(await this.deps.exists(insertionPath))) {throw new Error('调整后的图片未成功保存，笔记尚未修改。');}
-      let snapshot: unknown = null;
-      try {snapshot = await this.deps.captureSelection?.(selection.target);} catch { /* Optional metadata only. */ }
       const current = await this.context();
       if (current.path !== selection.target.path || current.page !== selection.target.page) {
         throw new Error('当前笔记或页码已变化。请返回目标页后重新选择图片。');
@@ -166,11 +162,24 @@ export class ImageController {
       // Mutations are never automatically retried. A rejected bridge call could
       // still have changed the note, so block a second submission of this selection.
       this.consumed = true;
-      let inserted;
-      try {inserted = response(await this.deps.insert(insertionPath));}
+      let completion: Promise<{ok: true; value: unknown} | {ok: false; error: unknown}>;
+      try {
+        // Queue the insertion before closing the overlay, as the working reference
+        // plugin does. Attach rejection handling before starting the handoff.
+        completion = this.deps.insert(insertionPath).then(
+          value => ({ok: true as const, value}), error => ({ok: false as const, error}));
+      }
       catch (error) {
         throw new Error(`未能确认插入结果，请先返回笔记检查，避免重复插入。\n${errorText(error)}`);
       }
+      const returning = (async () => {
+        try {return await this.deps.returnToNote() === true;} catch {return false;}
+      })();
+      const [outcome, returned] = await Promise.all([completion, returning]);
+      if (!outcome.ok) {
+        throw new Error(`未能确认插入结果，请先返回笔记检查，避免重复插入。\n${errorText(outcome.error)}`);
+      }
+      const inserted = response(outcome.value);
       if (inserted.success === false || (inserted.success === true && inserted.result === false)) {
         this.consumed = false;
         throw apiError(inserted.error, '图片未插入');
@@ -178,18 +187,10 @@ export class ImageController {
       if (inserted.success !== true || inserted.result !== true) {
         throw new Error('系统没有返回明确的插入结果，请先返回笔记检查，避免重复插入。');
       }
-      // Saving is a separate step: a failed save must not be reported as a
-      // failed insertion or offer to insert the image again.
-      try {
-        const saved = response(await this.deps.save());
-        if (saved.success !== true || saved.result !== true) {
-          throw apiError(saved.error, '保存未确认');
-        }
-        try {await this.deps.selectInserted?.(selection.target, snapshot);} catch { /* The image is already saved. */ }
-        return {saved: true};
-      } catch (error) {
-        return {saved: false, warning: `图片已插入，但未能确认保存。请返回笔记检查并保存。\n${errorText(error)}`};
-      }
+      // Leave the host's native selection untouched. Placement confirmation and
+      // note persistence now follow the normal note UI after the handoff.
+      return returned ? {inserted: true, returned: true} : {inserted: true, returned: false,
+        warning: '图片已插入，但暂时无法返回笔记。请使用左上角返回按钮。'};
     } finally {this.busy = false;}
   }
 }

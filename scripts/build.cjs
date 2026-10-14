@@ -74,7 +74,7 @@ function collect(dir, prefix = '') {
 collect(generated);
 const buffer = zipSync(files, {level: 9});
 const verified = unzipSync(buffer);
-for (const required of ['PluginConfig.json', 'LocalImage.bundle', 'icon.png', 'drawable-mdpi/assets_icon.png', 'THIRD-PARTY-NOTICES.txt', 'app.npk', 'LICENSE', 'drawable-mdpi/assets_bolt.png', 'drawable-mdpi/assets_reset.png', 'drawable-mdpi/assets_compare.png', 'drawable-mdpi/assets_comparewhite.png']) {
+for (const required of ['PluginConfig.json', 'LocalImage.bundle', 'icon.png', 'drawable-mdpi/assets_icon.png', 'THIRD-PARTY-NOTICES.txt', 'app.npk', 'LICENSE', 'drawable-mdpi/assets_bolt.png', 'drawable-mdpi/assets_reset.png', 'drawable-mdpi/assets_compare.png', 'drawable-mdpi/assets_comparewhite.png', 'drawable-mdpi/assets_about.png', 'drawable-mdpi/assets_notearrow.png']) {
   if (!verified[required]?.length) {throw Error('Missing package member: ' + required);}
 }
 const output = path.join(buildRoot, 'outputs');

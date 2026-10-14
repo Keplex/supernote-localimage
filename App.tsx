@@ -3,7 +3,7 @@ import {BackHandler, Image, SafeAreaView, ScrollView, StyleSheet, Text, View} fr
 import {PluginManager} from 'sn-plugin-lib';
 import {basename, errorText, fileUri, ImageController} from './src/core';
 import type {Selection} from './src/core';
-import {BUTTON_ID, dependencies, initializePlugin, renderImage, loadLanguage, saveLanguage} from './src/runtime';
+import {BUTTON_ID, dependencies, initializePlugin, renderImage, loadLanguage, saveLanguage, showInsertionFailure} from './src/runtime';
 import {FULL_CROP, NEUTRAL, recipeKey, resolvedRecipe, previewHeight} from './src/editor';
 import type {Corner, Crop, Recipe, RenderResult, Tone} from './src/editor';
 import {Button, CompareButton, CropCanvas, Histogram, ResetButton, ToneControls, TonePresets} from './src/EditorControls';
@@ -25,6 +25,8 @@ export default function App(): React.JSX.Element {
   const aboutOpen = useRef(false); aboutOpen.current = about;
   const [ready, setReady] = useState(false), [busy, setBusy] = useState('');
   const [language, showLanguage] = useState(getLanguage()), [languageBusy, setLanguageBusy] = useState(false);
+  const [noteName, setNoteName] = useState('');
+  const noteRevision = useRef(0);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [message, setMessage] = useState(''), [submitted, setSubmitted] = useState(false);
   const [stage, setStage] = useState<'crop' | 'tone'>('crop');
@@ -58,6 +60,16 @@ export default function App(): React.JSX.Element {
     setSelection(null); setBase(null); setPreview(null);
     setCrop({...FULL_CROP}); setTone({...NEUTRAL}); setCorner('topLeft'); setStage('crop'); setCompare(false);
     setMessage(''); setSubmitted(false); setPreviewError(false);
+    void updateNoteName();
+  }
+  async function updateNoteName() {
+    const revision = ++noteRevision.current;
+    try {
+      const current = await dependencies.currentFile() as {success?: boolean; result?: unknown} | null;
+      if (alive.current && revision === noteRevision.current) {
+        setNoteName(current?.success && typeof current.result === 'string' && /\.note$/i.test(current.result) ? basename(current.result) : '');
+      }
+    } catch {if (alive.current && revision === noteRevision.current) {setNoteName('');}}
   }
   async function close() {
     if (working.current || closing.current) {return;}
@@ -74,6 +86,7 @@ export default function App(): React.JSX.Element {
       try {const value = await loadLanguage(); if (alive.current) {showLanguage(value);}}
       catch (error) {if (alive.current) {setMessage(errorText(error));}}
       if (!alive.current) {return;}
+      await updateNoteName();
       setReady(true);
       subscription = PluginManager.registerButtonListener({onButtonPress(event) {
         if (event.id === BUTTON_ID && !working.current) {resetEditor();}
@@ -102,33 +115,32 @@ export default function App(): React.JSX.Element {
   }
 
   // Shared mutation path: omitting prepare passes the original file straight to insertImage.
-  async function finishInsertion(prepare?: (selected: Selection) => Promise<string>): Promise<boolean> {
+  async function finishInsertion(prepare?: (selected: Selection) => Promise<string>): Promise<void> {
     try {
       const result = await controller.current.insert(prepare);
       if (alive.current) {
         setSubmitted(true);
-        setMessage(result.saved ? '图片已插入并保存。' : result.warning || '图片已插入，请返回笔记检查。');
+        setMessage(result.returned ? '图片已交给笔记，请完成位置和大小调整。' : result.warning || '图片已插入，请返回笔记检查。');
       }
-      return result.saved;
     } catch (error) {
       if (alive.current) {setSubmitted(!controller.current.canInsert); setMessage(errorText(error));}
-      return false;
+      await showInsertionFailure(errorText(error));
     }
   }
   async function choose(direct = false) {
     if (working.current || !ready) {return;}
     queue.cancel(); working.current = true; setBusy('正在读取图片…'); setMessage('');
-    let saved = false;
     try {
       const selected = await controller.current.pick();
       if (!selected) {if (alive.current) {setMessage('已取消选择，笔记未修改。');} return;}
       if (!alive.current) {return;}
       neutralCache.current = null;
       setSelection(selected); setBase(null); setPreview(null);
+      ++noteRevision.current; setNoteName(basename(selected.target.path));
       setCrop({...FULL_CROP}); setTone({...NEUTRAL}); setCorner('topLeft'); setStage('crop'); setCompare(false);
       setSubmitted(false); setPreviewError(false);
       if (direct) {
-        setBusy('正在插入原图…'); saved = await finishInsertion();
+        setBusy('正在插入原图…'); await finishInsertion();
       } else {
         setBusy('正在生成预览…');
         const image = await renderImage(selected.path, {...FULL_CROP, ...NEUTRAL}, 'base');
@@ -137,19 +149,16 @@ export default function App(): React.JSX.Element {
       }
     } catch (error) {if (alive.current) {setMessage(errorText(error));}}
     finally {working.current = false; if (alive.current) {setBusy('');}}
-    if (saved && alive.current) {await close();}
   }
   async function insert(edited: boolean) {
     if (working.current || !controller.current.canInsert || (edited && (dirty || !preview || previewError || compare || previewStatus !== 'idle'))) {return;}
     queue.cancel(); working.current = true;
     setBusy(edited ? '正在保存图片并插入…' : '正在插入原图…'); setMessage('');
-    let saved = false;
     try {
       const applied = preview?.recipe;
-      saved = await finishInsertion(edited && applied ? async selected =>
+      await finishInsertion(edited && applied ? async selected =>
         (await renderImage(selected.path, applied, 'export')).path : undefined);
     } finally {working.current = false; if (alive.current) {setBusy('');}}
-    if (saved && alive.current) {await close();}
   }
   function changeStage(value: 'crop' | 'tone') {
     if (stage === value) {return;}
@@ -161,9 +170,10 @@ export default function App(): React.JSX.Element {
   const statusText = previewStatus === 'waiting' ? '等待自动预览…' : previewStatus === 'rendering' ? '正在更新预览…'
     : previewError ? '预览失败，调整参数或还原灰阶后重试' : compare ? '原始灰阶（已裁剪） · 再点 ◐ 看调整效果' : '停止调节 0.5 秒后自动预览 · ◐ 对比原灰阶';
   const changeTone = (value: Tone) => {setTone(value); setCompare(false); setMessage('');};
-  if (about) {return <AboutScreen onBack={() => setAbout(false)} language={language} onLanguage={() => void switchLanguage()} languageDisabled={languageBusy} />;}
+  if (about) {return <AboutScreen onBack={() => setAbout(false)} onNote={() => void close()} noteName={noteName}
+    language={language} onLanguage={() => void switchLanguage()} languageDisabled={languageBusy} />;}
   return <SafeAreaView style={s.screen}>
-    <AppHeader language={language} onBack={() => void close()} onLanguage={() => void switchLanguage()}
+    <AppHeader language={language} noteName={noteName} onBack={() => void close()} onLanguage={() => void switchLanguage()}
       onAbout={() => {queue.cancel(); setAbout(true);}} disabled={!!busy} languageDisabled={!ready || languageBusy} />
     <View style={s.fileRow}>
       <View style={s.flex}><Text style={s.file} numberOfLines={1}>{selection ? basename(selection.path) : t('选择一张图片开始')}</Text>
@@ -232,7 +242,7 @@ export default function App(): React.JSX.Element {
               disabled={locked || dirty || previewError || compare || previewStatus !== 'idle'} onPress={() => void insert(true)} />}</View>
         </View>
         <Text style={s.hint} numberOfLines={1}>{t('目标')}: {basename(selection.target.path)} · {t('页')} {selection.target.page + 1}</Text>
-      </> : <Text style={s.hint}>Local Image 0.4.2</Text>}
+      </> : <Text style={s.hint}>Local Image 0.5.2</Text>}
     </View>
   </SafeAreaView>;
 }
@@ -246,7 +256,7 @@ const s = StyleSheet.create({
   hint: {fontSize: 12, lineHeight: 18, color: '#333'}, body: {fontSize: 17, lineHeight: 24, color: '#111'},
   file: {fontSize: 15, lineHeight: 20, fontWeight: '600', color: '#111'},
   empty: {flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12}, icon: {width: 60, height: 60},
-  preview: {backgroundColor: '#eee'}, placeholder: {alignItems: 'center', justifyContent: 'center'}, full: {width: '100%', height: '100%'},
+  preview: {backgroundColor: '#fff'}, placeholder: {backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center'}, full: {width: '100%', height: '100%'},
   footer: {paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: 1, borderColor: '#aaa', gap: 4},
   message: {fontSize: 13, lineHeight: 18, color: '#111'}, busy: {fontSize: 14, lineHeight: 20, color: '#111', fontWeight: '600'},
 });

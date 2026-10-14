@@ -6,13 +6,14 @@ const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '
 const unitless = new Set(['flex', 'flexGrow', 'flexShrink', 'opacity', 'fontWeight', 'zIndex']);
 function flatten(style) {return Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean).map(flatten)) : style || {};}
 function css(style) {
+  if (typeof style === 'function') {style = style({pressed: false});}
   style = flatten(style);
   const expanded = {...style};
   for (const dimension of ['padding', 'margin']) {
     if (style[dimension + 'Horizontal'] != null) {expanded[dimension + 'Left'] = expanded[dimension + 'Right'] = style[dimension + 'Horizontal'];}
     if (style[dimension + 'Vertical'] != null) {expanded[dimension + 'Top'] = expanded[dimension + 'Bottom'] = style[dimension + 'Vertical'];}
   }
-  return Object.entries(expanded).filter(([name]) => !/Horizontal|Vertical|fontVariant/.test(name)).map(([name, value]) => {
+  return Object.entries(expanded).filter(([name]) => !/Horizontal|Vertical|fontVariant|includeFontPadding/.test(name)).map(([name, value]) => {
     if (name === 'flex' && value === 1) {return 'flex:1 1 0%';}
     if (name === 'borderColor') {return `border-color:${value};border-style:solid`;}
     if (name === 'borderWidth') {return `border-width:${value}px;border-style:solid`;}
@@ -27,7 +28,8 @@ exports.checkLayouts = async ({mount, press, unmount, act, flush, setStoredLangu
   const bolt = 'data:image/png;base64,' + fs.readFileSync(path.join(root, 'assets/bolt.png')).toString('base64');
   const icons = {
     'Local Image logo': logo, 'Quick insert icon': bolt,
-    ...Object.fromEntries([['Reset icon', 'reset'], ['Compare icon', 'compare'], ['Compare icon white', 'compare-white']]
+    ...Object.fromEntries([['Reset icon', 'reset'], ['Compare icon', 'compare'], ['Compare icon white', 'compare-white'],
+      ['About icon', 'about'], ['Return to note icon', 'note-arrow']]
       .map(([label, file]) => [label, 'data:image/png;base64,' + fs.readFileSync(path.join(root, 'assets', file + '.png')).toString('base64')])),
   };
   const out = path.join(root, 'build/layout-qa'); fs.mkdirSync(out, {recursive: true});
@@ -76,17 +78,36 @@ exports.checkLayouts = async ({mount, press, unmount, act, flush, setStoredLangu
           if (stage !== 'about') {assert.ok(metrics.content <= metrics.visible + 2, `${language}/${stage}/${width}: vertical overflow ${JSON.stringify(metrics)}`);}
           assert.ok(metrics.contentWidth <= metrics.width + 2, 'Horizontal overflow');
           const buttons = await page.locator('[data-type=Pressable]').evaluateAll(nodes => nodes.map(n => {
-            const r = n.getBoundingClientRect(); return {label: n.dataset.label, top: r.top, bottom: r.bottom, left: r.left, right: r.right};
+            const r = n.getBoundingClientRect(); return {label: n.dataset.label, top: r.top, bottom: r.bottom, left: r.left, right: r.right,
+              radius: parseFloat(getComputedStyle(n).borderRadius)};
           }));
           assert.ok(buttons.every(b => b.top >= 0 && (stage === 'about' || b.bottom <= height) && b.left >= 0 && b.right <= width), JSON.stringify(buttons));
+          assert.ok(buttons.every(b => b.radius > 0), 'Every button must have rounded corners');
           const header = await page.locator('[data-label="Local Image header"]').evaluate(n => {
             const rect = e => {const r = e.getBoundingClientRect(); return {left: r.left, top: r.top, width: r.width, height: r.height};};
-            return {header: rect(n), logo: rect(n.querySelector('img')), title: rect(n.querySelector('[data-label="Local Image header title"]')),
+            return {header: rect(n), brand: rect(n.querySelector('[data-label="Local Image centered title"]')),
+              logo: rect(n.querySelector('[data-label="Local Image logo"]')), title: rect(n.querySelector('[data-label="Local Image header title"]')),
               buttons: [...n.querySelectorAll('[data-type=Pressable]')].map(rect)};
           });
+          assert.ok(Math.abs(header.brand.left + header.brand.width / 2 - width / 2) < 0.01, 'Brand must be centered in the screen');
+          assert.ok(Math.abs((header.logo.left + header.title.left + header.title.width) / 2 - width / 2) < 0.01, 'Visible logo and title must be centered together');
           if (stage === 'home') {headers.set(width, header);}
           else {assert.deepEqual(header, headers.get(width), 'Header controls must keep their coordinates on every page');}
-          const iconAlignment = await page.locator('img[data-label="Reset icon"], img[data-label="Compare icon"], img[data-label="Compare icon white"]').evaluateAll(nodes => nodes.map(n => {
+          const arrow = await page.locator('img[data-label="Return to note icon"]').evaluate(n => {
+            const r = n.getBoundingClientRect(), b = n.parentElement.getBoundingClientRect();
+            return {y: (r.top + r.bottom - b.top - b.bottom) / 2, overlap: r.right - b.right};
+          });
+          assert.deepEqual(arrow, {y: 0, overlap: 10}, 'Note return arrow must be centered and overlap the right edge');
+          const languageLabels = await page.locator('[data-label="Chinese language label"], [data-label="English language label"]').evaluateAll(nodes => nodes.map(n => {
+            const r = n.getBoundingClientRect(), b = n.parentElement.getBoundingClientRect();
+            return {label: n.dataset.label, color: getComputedStyle(n).color, y: (r.top + r.bottom - b.top - b.bottom) / 2};
+          }));
+          for (const label of languageLabels) {
+            const active = label.label === (language === 'zh' ? 'Chinese language label' : 'English language label');
+            assert.equal(label.color, active ? 'rgb(17, 17, 17)' : 'rgb(153, 153, 153)');
+            assert.ok(Math.abs(label.y) < 0.01, 'Language labels must be vertically centered');
+          }
+          const iconAlignment = await page.locator('img[data-label="Reset icon"], img[data-label="Compare icon"], img[data-label="Compare icon white"], img[data-label="About icon"]').evaluateAll(nodes => nodes.map(n => {
             const r = n.getBoundingClientRect(), b = n.parentElement.getBoundingClientRect();
             const text = n.parentElement.querySelector('[data-type=Text]')?.getBoundingClientRect();
             return {label: n.dataset.label, y: (r.top + r.bottom - b.top - b.bottom) / 2,
@@ -96,7 +117,7 @@ exports.checkLayouts = async ({mount, press, unmount, act, flush, setStoredLangu
           for (const icon of iconAlignment) {
             assert.ok(Math.abs(icon.y) < 0.01, `${icon.label} must be vertically centered`);
             if (icon.label === 'Reset icon') {assert.ok(Math.abs(icon.textY) < 0.01, 'Reset icon must align with text');}
-            else {assert.ok(Math.abs(icon.x) < 0.01, 'Compare icon must be horizontally centered');}
+            else {assert.ok(Math.abs(icon.x) < 0.01, `${icon.label} must be horizontally centered`);}
           }
           if (stage === 'tone' || stage === 'tone-natural' || stage === 'tone-compare') {
             const previewLabel = stage === 'tone-compare' ? (language === 'zh' ? '原始灰阶（已裁剪）' : 'Original tone (cropped)') : (language === 'zh' ? '调整后的效果' : 'Edited preview');

@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <title>Local Image — a picture placed onto a note</title>
-  <path d="M18 13h67l21 21v74a7 7 0 0 1-7 7H25a7 7 0 0 1-7-7Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/>
-  <path d="M85 13v21h21M31 99h39" fill="none" stroke="black" stroke-width="7" stroke-linejoin="round"/>
-  <rect x="29" y="40" width="64" height="46" rx="4" fill="black"/>
-  <circle cx="77" cy="51" r="5" fill="white"/>
-  <path d="m36 78 17-23 15 17 9-9 10 15Z" fill="white"/>
-  <path d="M102 70v32M86 86h32" fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
-  <path d="M102 70v32M86 86h32" fill="none" stroke="black" stroke-width="8" stroke-linecap="square"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 32 32">
+  <title>Local Image — an original picture with a circled plus</title>
+  <g transform="translate(-0.75 -0.75)" stroke="black" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="23" height="22" rx="2" fill="none"/>
+    <path d="m7 19 6-7 5 5" fill="none"/>
+    <circle cx="21" cy="8.5" r="1.8" fill="black" stroke="none"/>
+    <circle cx="24" cy="24" r="6.5" fill="white"/>
+    <path d="M24 21v6m-3-3h6" fill="none" stroke-width="2.4"/>
+  </g>
 </svg>
